@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RWS P1 Master Baseline - Granular Level 4 Detail</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Your custom CSS -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="bg-slate-100 p-2 md:p-6 font-sans">
+  <div class="max-w-full mx-auto bg-white rounded-lg shadow-2xl overflow-hidden border border-slate-300">
+    <!-- Header Info -->
+    <div class="p-4 bg-slate-900 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-black tracking-tight flex items-center gap-2">
+          <span class="text-amber-500">RWS P1</span> MASTER BASELINE SCHEDULE
+        </h1>
+        <p class="text-slate-400 text-[10px] uppercase tracking-widest font-semibold mt-1">
+          Level 4 Detailed Works Breakdown (2024-2029)
+        </p>
+      </div>
+
+      <div class="flex gap-6 text-[10px] bg-slate-800 p-3 rounded-md border border-slate-700">
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase">Commencement</span>
+          <span class="font-bold text-emerald-400">19 AUG 2024</span>
+        </div>
+        <div class="w-px h-8 bg-slate-600"></div>
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase">Total Duration</span>
+          <span class="font-bold">1,645 DAYS</span>
+        </div>
+        <div class="w-px h-8 bg-slate-600"></div>
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase">Completion</span>
+          <span class="font-bold text-red-400">19 FEB 2029</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed Legend -->
+    <div class="p-2 flex flex-wrap gap-4 text-[8px] bg-slate-50 border-b font-bold uppercase text-slate-500">
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-700"></span> Piling</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-amber-600"></span> ERSS/Excavation</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-orange-500"></span> Concrete/Basement</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-600"></span> Structure (Towers/MK)</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-pink-600"></span> DTS Viaduct</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-indigo-600"></span> Fit-out/Facade</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-purple-500"></span> As-Builts</div>
+    </div>
+
+    <!-- Gantt Main -->
+    <div class="gantt-grid">
+      <div class="label-col section-header">Detailed Activity / WBS Element</div>
+      <div class="timeline-header" id="timelineHeader"></div>
+      <div id="ganttRows" class="contents"></div>
+    </div>
+
+    <!-- Strategic Analytics -->
+    <div class="p-4 bg-slate-900 border-t border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-slate-300">
+      <div class="space-y-1">
+        <span class="text-amber-500 font-black uppercase text-[9px] tracking-tighter">Critical Path Analysis:</span>
+        <p>
+          The path from <span class="text-white">New Basement Excavation</span> to
+          <span class="text-white">M18 (Feb 2026)</span> is the highest risk area. Any delay in Strut L2 installation
+          directly delays the Transfer Plate.
+        </p>
+      </div>
+      <div class="space-y-1">
+        <span class="text-pink-500 font-black uppercase text-[9px] tracking-tighter">DTS Coordination:</span>
+        <p>
+          M30 Milestone is dependent on <span class="text-white">D01 Marine Deck</span> as-builts and track installation.
+          Structural handovers for DTS begin Dec 2026.
+        </p>
+      </div>
+      <div class="space-y-1">
+        <span class="text-emerald-500 font-black uppercase text-[9px] tracking-tighter">Tower Cycle:</span>
+        <p>
+          Typical floors for <span class="text-white">ICON Tower</span> are scheduled on a 10-day cycle, moving to
+          architectural fit-out after L12 structural completion.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Your JS (defer = runs after HTML loads) -->
+  <script src="app.js" defer></script>
+</body>
+</html>
