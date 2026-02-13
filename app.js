@@ -2,8 +2,6 @@
 let startDate = new Date("2024-07-01");
 let endDate = new Date("2029-05-01");
 let tasks = [];
-
-// collapsed node indexes (in tasks array)
 const collapsed = new Set();
 
 // -------------------- Utils --------------------
@@ -14,7 +12,6 @@ function cleanDateStr(s) {
 
 function parseP6Date(value) {
   if (!value) return null;
-
   if (value instanceof Date && !isNaN(value)) return value;
 
   const s = cleanDateStr(value);
@@ -44,6 +41,11 @@ function toISODate(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function fmtMilestoneLabel(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
 function daysBetween(a, b) {
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
 }
@@ -69,14 +71,13 @@ function leadingIndentCount(str) {
 }
 
 function indentToLevel(indentCount) {
-  // P6 pasted indentation varies; using /2 is a practical baseline
   return Math.floor(indentCount / 2);
 }
 
 function looksLikeActivityId(s) {
   if (!s) return false;
   const t = String(s).trim();
-  return /^P\d+_[A-Z]{2,}[_-]?\d+/.test(t);
+  return /^P\d+_[A-Z]{2}_[A-Z0-9]+$/i.test(t);
 }
 
 function colorFromName(name) {
@@ -97,15 +98,15 @@ function buildTimelineHeader() {
   if (!header) return;
   header.innerHTML = "";
 
-  const months = [{ label: "Jan" }, { label: "Jul" }];
+  const months = [{ label: "Jan", m: 0 }, { label: "Jul", m: 6 }];
   const yStart = startDate.getFullYear();
   const yEnd = endDate.getFullYear();
 
   for (let y = yStart; y <= yEnd; y++) {
-    months.forEach((m) => {
+    months.forEach((mm) => {
       const div = document.createElement("div");
       div.className = "timeline-cell";
-      div.innerText = `${m.label} ${y}`;
+      div.innerText = `${mm.label} ${y}`;
       header.appendChild(div);
     });
   }
@@ -113,17 +114,15 @@ function buildTimelineHeader() {
 
 // -------------------- Collapse logic --------------------
 function isHiddenByCollapse(idx) {
-  // FIX: must be 'let' because we walk up ancestors
-  let currentLevel = tasks[idx]?.level ?? 0;
+  let myLevel = tasks[idx].level ?? 0;
 
   for (let i = idx - 1; i >= 0; i--) {
     if (!tasks[i]) continue;
     const lvl = tasks[i].level ?? 0;
 
-    // only ancestors (levels smaller than us)
-    if (lvl < currentLevel) {
+    if (lvl < myLevel) {
       if (collapsed.has(i)) return true;
-      currentLevel = lvl; // walk up
+      myLevel = lvl;
     }
   }
   return false;
@@ -134,7 +133,7 @@ function toggleCollapse(idx) {
   else collapsed.add(idx);
 }
 
-// -------------------- Render gantt rows --------------------
+// -------------------- Render rows --------------------
 function buildGanttRows() {
   const container = document.getElementById("ganttRows");
   if (!container) return;
@@ -156,10 +155,10 @@ function buildGanttRows() {
 
     // ---------- Label ----------
     const label = document.createElement("div");
-    label.className = `label-col ${isGroup ? (task.type === "header" ? "section-header" : "sub-header") : ""}`;
-
+    label.className = `label-col sticky-left border-b ${
+      isGroup ? (task.type === "header" ? "section-header" : "sub-header") : ""
+    }`;
     if (isGroup) label.classList.add("clickable-header");
-
     label.style.paddingLeft = `${padLeft}px`;
 
     if (isGroup) {
@@ -184,9 +183,11 @@ function buildGanttRows() {
 
     // ---------- Bar container ----------
     const barCont = document.createElement("div");
-    barCont.className = `bar-container ${isGroup ? (task.type === "header" ? "section-header" : "sub-header") : ""}`;
+    barCont.className = `bar-container border-b ${
+      isGroup ? (task.type === "header" ? "section-header" : "sub-header") : ""
+    }`;
 
-    // Summary bars for group rows (if start/end present)
+    // Summary bar
     if (isGroup && task.start && task.end) {
       const startPos = getPosition(task.start);
       const endPos = getPosition(task.end);
@@ -196,21 +197,27 @@ function buildGanttRows() {
       sbar.className = "summary-bar";
       sbar.style.left = `${startPos}%`;
       sbar.style.width = `${width}%`;
-      sbar.title = `${task.name} (summary)`;
       barCont.appendChild(sbar);
     }
 
-    // Milestone
-    if (!isGroup && task.type === "milestone") {
+    // ✅ Milestone diamond + date label (like screenshot)
+    if (!isGroup && task.type === "milestone" && task.start) {
       const pos = getPosition(task.start);
+
       const diamond = document.createElement("div");
       diamond.className = "milestone-diamond";
       diamond.style.left = `calc(${pos}% - 5px)`;
       barCont.appendChild(diamond);
+
+      const lbl = document.createElement("div");
+      lbl.className = "milestone-label";
+      lbl.style.left = `calc(${pos}% + 10px)`;
+      lbl.textContent = fmtMilestoneLabel(task.start);
+      barCont.appendChild(lbl);
     }
 
     // Activity bar
-    if (!isGroup && task.type === "activity") {
+    if (!isGroup && task.type === "activity" && task.start && task.end) {
       const startPos = getPosition(task.start);
       const endPos = getPosition(task.end);
       const width = Math.max(0.5, endPos - startPos);
@@ -224,7 +231,7 @@ function buildGanttRows() {
       const dEnd = new Date(task.end);
       const days = daysBetween(dStart, dEnd);
 
-      bar.textContent = width > 2 ? `${days}d` : "";
+      bar.innerText = width > 3 ? `${days}d` : "";
       bar.title = `${task.name}: ${days} days`;
       barCont.appendChild(bar);
     }
@@ -232,9 +239,11 @@ function buildGanttRows() {
     container.appendChild(barCont);
   });
 
+  // status: no repeated appends
   const status = document.getElementById("status");
   if (status) {
-    if (hiddenCount > 0) status.textContent = `${status.textContent} (${hiddenCount} hidden by collapse)`;
+    const base = status.textContent.split(" (")[0];
+    status.textContent = hiddenCount > 0 ? `${base} (${hiddenCount} hidden by collapse)` : base;
   }
 }
 
@@ -248,16 +257,9 @@ function inferRowType(activityIdRaw, startD, finishD, durationRaw, indentLevel) 
   const idTrim = String(activityIdRaw ?? "").trim();
   const durNum = durationRaw === "" || durationRaw == null ? null : Number(durationRaw);
 
-  // Milestone: duration 0 OR no finish but has start
   if (startD && (durNum === 0 || !finishD)) return "milestone";
-
-  // Activity
   if (looksLikeActivityId(idTrim) && startD && finishD) return "activity";
-
-  // Group/WBS
   if (!looksLikeActivityId(idTrim)) return indentLevel <= 0 ? "header" : "sub-header";
-
-  // fallback
   if (startD && finishD) return "activity";
   return indentLevel <= 0 ? "header" : "sub-header";
 }
@@ -279,12 +281,11 @@ function buildTasksFromRows(rows) {
       r["Duration"] ??
       "";
 
-    const indentCount = leadingIndentCount(rawId) || leadingIndentCount(rawName);
+    const indentCount = leadingIndentCount(rawName) || leadingIndentCount(rawId);
     const level = indentToLevel(indentCount);
 
     const idTrim = String(rawId || "").trim();
     const nameTrim = String(rawName || "").trim();
-
     if (!idTrim && !nameTrim && !rawStart && !rawFinish) return;
 
     const startD = parseP6Date(rawStart);
@@ -293,10 +294,8 @@ function buildTasksFromRows(rows) {
     const type = inferRowType(rawId, startD, finishD, rawDur, level);
     const title = nameTrim || idTrim;
 
-    // Group rows (headers): keep summary start/end if present
     if (type === "header" || type === "sub-header") {
       const obj = { name: title, type, level };
-
       if (startD) obj.start = toISODate(startD);
       if (finishD) obj.end = toISODate(finishD);
 
@@ -307,7 +306,6 @@ function buildTasksFromRows(rows) {
       return;
     }
 
-    // Milestone
     if (type === "milestone") {
       if (startD) {
         newTasks.push({ name: title, type: "milestone", start: toISODate(startD), level });
@@ -317,7 +315,6 @@ function buildTasksFromRows(rows) {
       return;
     }
 
-    // Activity
     if (startD && finishD) {
       newTasks.push({
         name: title,
@@ -333,7 +330,6 @@ function buildTasksFromRows(rows) {
     }
   });
 
-  // Auto chart range
   if (minD && maxD) {
     const padStart = new Date(minD);
     padStart.setMonth(padStart.getMonth() - 1);
@@ -348,7 +344,7 @@ function buildTasksFromRows(rows) {
   return newTasks;
 }
 
-// -------------------- Wire up UI --------------------
+// -------------------- UI --------------------
 document.addEventListener("DOMContentLoaded", () => {
   const status = document.getElementById("status");
   const fileInput = document.getElementById("excelFile");
@@ -373,7 +369,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const data = await f.arrayBuffer();
     const workbook = XLSX.read(data, { type: "array" });
-
     const sheetName = workbook.SheetNames[0];
     const ws = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });

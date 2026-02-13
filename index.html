@@ -5,79 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RWS P1 Master Baseline Schedule</title>
 
-    <!-- Tailwind (CDN ok for your use; console warning is normal) -->
+    <!-- Tailwind via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- XLSX -->
+    <!-- SheetJS -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <link rel="stylesheet" href="styles.css" />
   </head>
 
   <body class="bg-slate-100 p-2 md:p-6 font-sans">
-    <div class="max-w-full mx-auto bg-white rounded-lg shadow-2xl overflow-hidden">
+    <div class="max-w-full mx-auto bg-white rounded-xl shadow-2xl overflow-hidden">
       <!-- Header -->
-      <div class="header-bar">
+      <div class="header p-4 md:p-6 flex items-center justify-between gap-4">
         <div>
-          <div class="title">RWS P1 <span class="title-strong">MASTER BASELINE SCHEDULE</span></div>
-          <div class="subtitle">GANTT VIEWER (UPLOAD EXCEL PASTED FROM P6)</div>
+          <div class="text-orange-400 font-black text-xl tracking-wide">
+            RWS P1 MASTER BASELINE SCHEDULE
+          </div>
+          <div class="text-slate-300 text-xs tracking-wider">
+            GANTT VIEWER (UPLOAD EXCEL PASTED FROM P6)
+          </div>
         </div>
 
-        <div class="howto">
-          <div class="howto-item">
-            <div class="howto-label">HOW TO USE</div>
-            <div class="howto-value text-emerald-300 font-bold">Upload Excel</div>
-          </div>
-          <div class="howto-item">
-            <div class="howto-label">TREE</div>
-            <div class="howto-value">Click headers</div>
-          </div>
-          <div class="howto-item">
-            <div class="howto-label">SUMMARY</div>
-            <div class="howto-value text-rose-300 font-bold">Thick bars</div>
-          </div>
+        <div class="help-box">
+          <div class="help-title">HOW TO USE</div>
+          <div class="help-row"><span class="help-k">Upload Excel</span><span class="help-v">Click load</span></div>
+          <div class="help-row"><span class="help-k">TREE</span><span class="help-v">Click headers</span></div>
+          <div class="help-row"><span class="help-k">SUMMARY</span><span class="help-v">Thick bars</span></div>
         </div>
       </div>
 
       <!-- Controls -->
-      <div class="controls">
-        <input id="excelFile" type="file" accept=".xlsx,.xls" />
-        <button id="loadBtn" class="btn primary">Load Excel & Update Gantt</button>
-        <button id="expandAllBtn" class="btn">Expand all</button>
-        <div id="status" class="status">Ready.</div>
+      <div class="controls flex flex-wrap items-center gap-3 p-4 border-b">
+        <input id="excelFile" type="file" accept=".xlsx,.xls" class="text-sm" />
+        <button id="loadBtn" class="btn-primary">Load Excel &amp; Update Gantt</button>
+        <button id="expandAllBtn" class="btn-secondary">Expand all</button>
+        <div id="status" class="text-xs text-slate-600 ml-2">Ready.</div>
       </div>
 
       <!-- Legend -->
-      <div class="legend">
-        <div class="leg"><span class="sw bg-slate-500"></span>DEFAULT</div>
-        <div class="leg"><span class="sw bg-blue-700"></span>PILING</div>
-        <div class="leg"><span class="sw bg-amber-600"></span>ERSS/EXCAVATION</div>
-        <div class="leg"><span class="sw bg-orange-500"></span>BASEMENT/CONCRETE</div>
-        <div class="leg"><span class="sw bg-emerald-600"></span>STRUCTURE</div>
-        <div class="leg"><span class="sw bg-pink-600"></span>DTS</div>
-        <div class="leg"><span class="sw bg-indigo-600"></span>FIT-OUT/MEP</div>
-        <div class="leg"><span class="sw bg-purple-500"></span>AS-BUILTS/STATUTORY</div>
-        <div class="leg"><span class="sw summary"></span>SUMMARY BAR</div>
-        <div class="leg"><span class="sw milestone"></span>MILESTONE</div>
+      <div class="legend px-4 py-2 border-b text-[10px] flex flex-wrap gap-4 items-center">
+        <span class="leg"><span class="dot bg-slate-500"></span>DEFAULT</span>
+        <span class="leg"><span class="dot bg-blue-700"></span>PILING</span>
+        <span class="leg"><span class="dot bg-amber-600"></span>ERSS/EXCAVATION</span>
+        <span class="leg"><span class="dot bg-orange-500"></span>BASEMENT/CONCRETE</span>
+        <span class="leg"><span class="dot bg-emerald-600"></span>STRUCTURE</span>
+        <span class="leg"><span class="dot bg-pink-600"></span>DTS</span>
+        <span class="leg"><span class="dot bg-indigo-600"></span>FIT-OUT/MEP</span>
+        <span class="leg"><span class="dot bg-purple-500"></span>AS-BUILTS/STATUTORY</span>
+        <span class="leg"><span class="dot bg-slate-900"></span>SUMMARY BAR</span>
+        <span class="leg"><span class="diamond"></span>MILESTONE</span>
       </div>
 
-      <!-- Gantt -->
-      <div class="gantt">
+      <!-- ✅ Scroll area (horizontal) -->
+      <div class="gantt-outer">
         <div class="gantt-grid">
-          <div class="label-head">DETAILED ACTIVITY / WBS ELEMENT</div>
-          <div id="timelineHeader" class="timeline-head"></div>
+          <!-- Left sticky header cell -->
+          <div class="label-col section-header sticky-left">DETAILED ACTIVITY / WBS ELEMENT</div>
 
-          <div id="ganttRows" class="rows"></div>
+          <!-- Right timeline header (scrolls) -->
+          <div class="timeline-scroll" id="timelineScroll">
+            <div id="timelineHeader" class="timeline-header"></div>
+          </div>
+
+          <!-- Rows -->
+          <div id="ganttRows" class="contents"></div>
         </div>
+      </div>
 
-        <div class="tip">
+      <!-- Tip -->
+      <div class="p-4">
+        <div class="tip-box">
           <div class="tip-title">TIP:</div>
-          Paste the Activities table from P6 into Excel (keeping indentation), save as xlsx, upload here.
-          Click a header/subheader to collapse/expand its children.
+          <div class="tip-text">
+            Paste the Activities table from P6 into Excel (keeping indentation), save as .xlsx, upload here.
+            Click a header/subheader to collapse/expand its children.
+            Use mouse wheel + Shift to scroll sideways.
+          </div>
         </div>
       </div>
     </div>
 
-    <script src="app.js" defer></script>
+    <script src="app.js"></script>
   </body>
 </html>
