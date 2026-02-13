@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RWS P1 Master Baseline - Granular Level 4 Detail</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="bg-slate-100 p-2 md:p-6 font-sans">
+  <div class="max-w-full mx-auto bg-white rounded-lg shadow-2xl overflow-hidden border border-slate-300">
+
+    <!-- Header Info -->
+    <div class="p-4 bg-slate-900 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-black tracking-tight flex items-center gap-2">
+          <span class="text-amber-500">RWS P1</span> MASTER BASELINE SCHEDULE
+        </h1>
+        <p class="text-slate-400 text-[10px] uppercase tracking-widest font-semibold mt-1">
+          Gantt Viewer (Upload Excel pasted from P6)
+        </p>
+      </div>
+
+      <div class="flex gap-6 text-[10px] bg-slate-800 p-3 rounded-md border border-slate-700">
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase">How to use</span>
+          <span class="font-bold text-emerald-400">Upload Excel</span>
+        </div>
+        <div class="w-px h-8 bg-slate-600"></div>
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase">Tree</span>
+          <span class="font-bold">Click headers</span>
+        </div>
+        <div class="w-px h-8 bg-slate-600"></div>
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase">Summary</span>
+          <span class="font-bold text-red-400">Thick bars</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Bar -->
+    <div class="p-3 bg-white border-b flex flex-wrap items-center gap-3">
+      <input id="excelFile" type="file" accept=".xlsx,.xls" class="text-[12px]" />
+      <button id="loadBtn" class="px-3 py-2 rounded bg-slate-900 text-white text-[12px] font-bold">
+        Load Excel & Update Gantt
+      </button>
+      <button id="expandAllBtn" class="px-3 py-2 rounded bg-slate-200 text-slate-900 text-[12px] font-bold border">
+        Expand all
+      </button>
+      <span id="status" class="text-[12px] text-slate-600"></span>
+    </div>
+
+    <!-- Legend -->
+    <div class="p-2 flex flex-wrap gap-4 text-[8px] bg-slate-50 border-b font-bold uppercase text-slate-500">
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-slate-700"></span> Default</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-blue-700"></span> Piling</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-amber-600"></span> ERSS/Excavation</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-orange-500"></span> Basement/Concrete</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-600"></span> Structure</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-pink-600"></span> DTS</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-indigo-600"></span> Fit-out/MEP</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-purple-500"></span> As-builts/Statutory</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-slate-900"></span> Summary bar</div>
+      <div class="flex items-center gap-1"><span class="w-2 h-2 bg-red-500 rotate-45 inline-block"></span> Milestone</div>
+    </div>
+
+    <!-- Gantt Main -->
+    <div class="gantt-grid">
+      <div class="label-col section-header">Detailed Activity / WBS Element</div>
+      <div class="timeline-header" id="timelineHeader"></div>
+      <div id="ganttRows" class="contents"></div>
+    </div>
+
+    <!-- Footer Help -->
+    <div class="p-3 bg-slate-900 border-t border-slate-800 text-[11px] text-slate-300">
+      <div class="space-y-1">
+        <span class="text-amber-500 font-black uppercase text-[9px] tracking-tighter">Tip:</span>
+        <p>
+          Paste the Activities table from P6 into Excel (keeping indentation), save as .xlsx, upload here.
+          Click a header/subheader to collapse/expand its children.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
