@@ -112,16 +112,15 @@ function buildTimelineHeader() {
 
 // -------------------- Collapse logic --------------------
 function isHiddenByCollapse(idx) {
-  const myLevel = tasks[idx].level ?? 0;
+  let myLevel = tasks[idx].level ?? 0;
 
   for (let i = idx - 1; i >= 0; i--) {
     if (!tasks[i]) continue;
     const lvl = tasks[i].level ?? 0;
 
-    // Only ancestors matter
     if (lvl < myLevel) {
       if (collapsed.has(i)) return true;
-      myLevel = lvl; // walk up
+      myLevel = lvl;
     }
   }
   return false;
@@ -138,30 +137,21 @@ function buildGanttRows() {
   if (!container) return;
   container.innerHTML = "";
 
-  let hiddenCount = 0;
-
   tasks.forEach((task, idx) => {
-    if (isHiddenByCollapse(idx)) {
-      hiddenCount++;
-      return;
-    }
+    if (isHiddenByCollapse(idx)) return;
 
-    const level = typeof task.level === "number" ? task.level : 0;
+    const level = task.level ?? 0;
     const padLeft = 12 + level * 18;
-
     const isGroup = task.type === "header" || task.type === "sub-header";
     const isCollapsed = collapsed.has(idx);
 
-    // ---------- Label ----------
     const label = document.createElement("div");
-    label.className = `label-col border-b ${isGroup ? (task.type === "header" ? "section-header" : "sub-header") : ""}`;
-
-    // Make group rows clickable (collapse/expand)
-    if (isGroup) label.classList.add("clickable-header");
-
+    label.className = `label-col border-b`;
     label.style.paddingLeft = `${padLeft}px`;
 
     if (isGroup) {
+      label.classList.add("clickable-header");
+
       const caret = document.createElement("span");
       caret.className = "caret";
       caret.textContent = isCollapsed ? "▶" : "▼";
@@ -176,17 +166,14 @@ function buildGanttRows() {
       label.addEventListener("click", () => {
         toggleCollapse(idx);
         buildGanttRows();
-        // keep header static
       });
     }
 
     container.appendChild(label);
 
-    // ---------- Bar container ----------
     const barCont = document.createElement("div");
-    barCont.className = `bar-container ${isGroup ? (task.type === "header" ? "section-header" : "sub-header") : ""} border-b`;
+    barCont.className = "bar-container border-b";
 
-    // Summary bars for group rows (if start/end present)
     if (isGroup && task.start && task.end) {
       const startPos = getPosition(task.start);
       const endPos = getPosition(task.end);
@@ -196,37 +183,24 @@ function buildGanttRows() {
       sbar.className = "summary-bar";
       sbar.style.left = `${startPos}%`;
       sbar.style.width = `${width}%`;
-      sbar.title = `${task.name} (summary)`;
       barCont.appendChild(sbar);
     }
 
-    // Milestone
     if (!isGroup && task.type === "milestone") {
       const pos = getPosition(task.start);
       const diamond = document.createElement("div");
       diamond.className = "milestone-diamond";
       diamond.style.left = `calc(${pos}% - 4px)`;
       barCont.appendChild(diamond);
-
-      const dateLabel = document.createElement("span");
-      dateLabel.className = "absolute text-[7px] text-red-600 font-black";
-      dateLabel.style.left = `calc(${pos}% + 10px)`;
-      dateLabel.innerText = new Date(task.start).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "2-digit",
-      });
-      barCont.appendChild(dateLabel);
     }
 
-    // Activity bar
     if (!isGroup && task.type === "activity") {
       const startPos = getPosition(task.start);
       const endPos = getPosition(task.end);
       const width = Math.max(0.5, endPos - startPos);
 
       const bar = document.createElement("div");
-      bar.className = `gantt-bar ${task.color || "bg-slate-500"}`;
+      bar.className = `gantt-bar ${task.color}`;
       bar.style.left = `${startPos}%`;
       bar.style.width = `${width}%`;
 
@@ -235,17 +209,11 @@ function buildGanttRows() {
       const days = daysBetween(dStart, dEnd);
 
       bar.innerText = width > 2 ? `${days}d` : "";
-      bar.title = `${task.name}: ${days} days`;
       barCont.appendChild(bar);
     }
 
     container.appendChild(barCont);
   });
-
-  const status = document.getElementById("status");
-  if (status && hiddenCount > 0) {
-    status.textContent = `${status.textContent} (${hiddenCount} hidden by collapse)`;
-  }
 }
 
 function renderAll() {
@@ -258,16 +226,9 @@ function inferRowType(activityIdRaw, startD, finishD, durationRaw, indentLevel) 
   const idTrim = String(activityIdRaw ?? "").trim();
   const durNum = durationRaw === "" || durationRaw == null ? null : Number(durationRaw);
 
-  // Milestone
   if (startD && (durNum === 0 || !finishD)) return "milestone";
-
-  // Activity
   if (looksLikeActivityId(idTrim) && startD && finishD) return "activity";
-
-  // Group/WBS
   if (!looksLikeActivityId(idTrim)) return indentLevel <= 0 ? "header" : "sub-header";
-
-  // fallback
   if (startD && finishD) return "activity";
   return indentLevel <= 0 ? "header" : "sub-header";
 }
@@ -278,53 +239,30 @@ function buildTasksFromRows(rows) {
   let maxD = null;
 
   rows.forEach((r) => {
-    const rawId = r["Activity ID"] ?? r["Activity Id"] ?? r["ActivityID"] ?? "";
-    const rawName = r["Activity Name"] ?? r["Activity"] ?? r["Name"] ?? "";
-    const rawStart = r["Start"] ?? r["Start Date"] ?? "";
-    const rawFinish = r["Finish"] ?? r["Finish Date"] ?? "";
-    const rawDur =
-      r["Original Duration"] ??
-      r["Planned Duration"] ??
-      r["Planned Dur."] ??
-      r["Duration"] ??
-      "";
+    const rawId = r["Activity ID"] ?? "";
+    const rawName = r["Activity Name"] ?? "";
+    const rawStart = r["Start"] ?? "";
+    const rawFinish = r["Finish"] ?? "";
+    const rawDur = r["Original Duration"] ?? r["Planned Duration"] ?? "";
 
     const indentCount = leadingIndentCount(rawId) || leadingIndentCount(rawName);
     const level = indentToLevel(indentCount);
-
-    const idTrim = String(rawId || "").trim();
-    const nameTrim = String(rawName || "").trim();
-
-    if (!idTrim && !nameTrim && !rawStart && !rawFinish) return;
 
     const startD = parseP6Date(rawStart);
     const finishD = parseP6Date(rawFinish);
 
     const type = inferRowType(rawId, startD, finishD, rawDur, level);
-    const title = nameTrim || idTrim;
+    const title = String(rawName || rawId).trim();
 
-    // Group rows: keep summary dates if present so we can draw summary bars
     if (type === "header" || type === "sub-header") {
-      const obj = { name: title, type, level };
-
-      if (startD) obj.start = toISODate(startD);
-      if (finishD) obj.end = toISODate(finishD);
-
-      newTasks.push(obj);
-
-      // chart bounds also consider summary dates
-      if (startD) minD = !minD || startD < minD ? startD : minD;
-      if (finishD) maxD = !maxD || finishD > maxD ? finishD : maxD;
-
+      newTasks.push({ name: title, type, level });
       return;
     }
 
-    if (type === "milestone") {
-      if (startD) {
-        newTasks.push({ name: title, type: "milestone", start: toISODate(startD), level });
-        minD = !minD || startD < minD ? startD : minD;
-        maxD = !maxD || startD > maxD ? startD : maxD;
-      }
+    if (type === "milestone" && startD) {
+      newTasks.push({ name: title, type: "milestone", start: toISODate(startD), level });
+      minD = !minD || startD < minD ? startD : minD;
+      maxD = !maxD || startD > maxD ? startD : maxD;
       return;
     }
 
@@ -343,16 +281,9 @@ function buildTasksFromRows(rows) {
     }
   });
 
-  // Auto chart range
   if (minD && maxD) {
-    const padStart = new Date(minD);
-    padStart.setMonth(padStart.getMonth() - 1);
-
-    const padEnd = new Date(maxD);
-    padEnd.setMonth(padEnd.getMonth() + 1);
-
-    startDate = padStart;
-    endDate = padEnd;
+    startDate = new Date(minD);
+    endDate = new Date(maxD);
   }
 
   return newTasks;
@@ -367,7 +298,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   expandAllBtn.addEventListener("click", () => {
     collapsed.clear();
-    if (status) status.textContent = "Expanded all.";
     buildGanttRows();
   });
 
@@ -379,11 +309,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     status.textContent = "Reading Excel…";
-    collapsed.clear(); // reset collapse on new load
+    collapsed.clear();
 
     const data = await f.arrayBuffer();
     const workbook = XLSX.read(data, { type: "array" });
-
     const sheetName = workbook.SheetNames[0];
     const ws = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
@@ -392,7 +321,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     status.textContent = `Loaded ${tasks.length} rows. Rendering…`;
     renderAll();
-    status.textContent = `Done. Loaded ${tasks.length} rows. Click headers to collapse.`;
+    status.textContent = `Done. Loaded ${tasks.length} rows.`;
   });
 
   renderAll();
