@@ -1,91 +1,116 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RWS P1 Master Baseline Schedule</title>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SCHEDULE GANTT CHART</title>
 
-    <!-- Tailwind via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind (for bg-xxx utility classes you use in bars) -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- SheetJS -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Poppins -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="styles.css" />
-  </head>
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-  <body class="bg-slate-100 p-2 md:p-6 font-sans">
-    <div class="max-w-full mx-auto bg-white rounded-xl shadow-2xl overflow-hidden">
-      <!-- Header -->
-      <div class="header p-4 md:p-6 flex items-center justify-between gap-4">
-        <div>
-          <div class="text-orange-400 font-black text-xl tracking-wide">
-            RWS P1 MASTER BASELINE SCHEDULE
-          </div>
-          <div class="text-slate-300 text-xs tracking-wider">
-            GANTT VIEWER (UPLOAD EXCEL PASTED FROM P6)
-          </div>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body class="bg-slate-50 text-slate-800" style="font-family: 'Poppins', sans-serif;">
+  <div class="max-w-full mx-auto bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200">
+
+    <!-- Header Info -->
+    <div class="p-5 bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200">
+      <div>
+        <h1 class="text-2xl font-black tracking-tight flex items-center gap-2 text-slate-900">
+          <span class="text-amber-600">SCHEDULE</span> GANTT CHART
+        </h1>
+        <p class="text-slate-500 text-xs uppercase tracking-widest font-semibold mt-1">
+          Upload Excel (copy/paste from P6) • Indentation preserved = hierarchy
+        </p>
+      </div>
+
+      <div class="flex gap-6 text-xs bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase tracking-wider mb-1">Commencement</span>
+          <span id="commDate" class="font-bold text-emerald-600">—</span>
         </div>
-
-        <div class="help-box">
-          <div class="help-title">HOW TO USE</div>
-          <div class="help-row"><span class="help-k">Upload Excel</span><span class="help-v">Click load</span></div>
-          <div class="help-row"><span class="help-k">TREE</span><span class="help-v">Click headers</span></div>
-          <div class="help-row"><span class="help-k">SUMMARY</span><span class="help-v">Thick bars</span></div>
+        <div class="w-px h-8 bg-slate-200"></div>
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase tracking-wider mb-1">Total Duration</span>
+          <span id="totalDur" class="font-bold text-slate-800">—</span>
         </div>
-      </div>
-
-      <!-- Controls -->
-      <div class="controls flex flex-wrap items-center gap-3 p-4 border-b">
-        <input id="excelFile" type="file" accept=".xlsx,.xls" class="text-sm" />
-        <button id="loadBtn" class="btn-primary">Load Excel &amp; Update Gantt</button>
-        <button id="expandAllBtn" class="btn-secondary">Expand all</button>
-        <div id="status" class="text-xs text-slate-600 ml-2">Ready.</div>
-      </div>
-
-      <!-- Legend -->
-      <div class="legend px-4 py-2 border-b text-[10px] flex flex-wrap gap-4 items-center">
-        <span class="leg"><span class="dot bg-slate-500"></span>DEFAULT</span>
-        <span class="leg"><span class="dot bg-blue-700"></span>PILING</span>
-        <span class="leg"><span class="dot bg-amber-600"></span>ERSS/EXCAVATION</span>
-        <span class="leg"><span class="dot bg-orange-500"></span>BASEMENT/CONCRETE</span>
-        <span class="leg"><span class="dot bg-emerald-600"></span>STRUCTURE</span>
-        <span class="leg"><span class="dot bg-pink-600"></span>DTS</span>
-        <span class="leg"><span class="dot bg-indigo-600"></span>FIT-OUT/MEP</span>
-        <span class="leg"><span class="dot bg-purple-500"></span>AS-BUILTS/STATUTORY</span>
-        <span class="leg"><span class="dot bg-slate-900"></span>SUMMARY BAR</span>
-        <span class="leg"><span class="diamond"></span>MILESTONE</span>
-      </div>
-
-      <!-- ✅ Scroll area (horizontal) -->
-      <div class="gantt-outer">
-        <div class="gantt-grid">
-          <!-- Left sticky header cell -->
-          <div class="label-col section-header sticky-left">DETAILED ACTIVITY / WBS ELEMENT</div>
-
-          <!-- Right timeline header (scrolls) -->
-          <div class="timeline-scroll" id="timelineScroll">
-            <div id="timelineHeader" class="timeline-header"></div>
-          </div>
-
-          <!-- Rows -->
-          <div id="ganttRows" class="contents"></div>
-        </div>
-      </div>
-
-      <!-- Tip -->
-      <div class="p-4">
-        <div class="tip-box">
-          <div class="tip-title">TIP:</div>
-          <div class="tip-text">
-            Paste the Activities table from P6 into Excel (keeping indentation), save as .xlsx, upload here.
-            Click a header/subheader to collapse/expand its children.
-            Use mouse wheel + Shift to scroll sideways.
-          </div>
+        <div class="w-px h-8 bg-slate-200"></div>
+        <div class="text-center">
+          <span class="block text-slate-500 uppercase tracking-wider mb-1">Completion</span>
+          <span id="compDate" class="font-bold text-rose-600">—</span>
         </div>
       </div>
     </div>
 
-    <script src="app.js"></script>
-  </body>
+    <!-- Controls -->
+    <div class="controls-panel">
+      <div class="controls-left">
+        <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" class="file-input" />
+        <button id="loadBtn" class="btn-primary">Load Excel & Update</button>
+        <button id="expandAllBtn" class="btn-secondary">Expand all</button>
+        <button id="fitBtn" class="btn-secondary">Fit to screen</button>
+
+        <div class="zoom-wrap" title="Zoom (month column width)">
+          <span class="zoom-label">Zoom</span>
+          <input id="zoomSlider" type="range" min="10" max="280" step="1" value="140" />
+          <span id="zoomValue" class="zoom-value">140px/mo</span>
+        </div>
+
+        <div id="status" class="status">Ready.</div>
+      </div>
+    </div>
+
+    <!-- Detailed Legend -->
+    <div class="legend-panel">
+      <div class="legend-item"><span class="dot bg-blue-700"></span> Piling</div>
+      <div class="legend-item"><span class="dot bg-amber-600"></span> ERSS/Excavation</div>
+      <div class="legend-item"><span class="dot bg-orange-500"></span> Concrete/Basement</div>
+      <div class="legend-item"><span class="dot bg-emerald-600"></span> Structure</div>
+      <div class="legend-item"><span class="dot bg-pink-600"></span> DTS Viaduct</div>
+      <div class="legend-item"><span class="dot bg-indigo-600"></span> Fit-out/Facade</div>
+      <div class="legend-item"><span class="dot bg-purple-500"></span> As-Builts</div>
+      <div class="legend-item"><span class="dot bg-slate-500"></span> Default</div>
+      <div class="legend-item"><span class="dot summary-dot"></span> Summary</div>
+      <div class="legend-item"><span class="diamond"></span> Milestone</div>
+    </div>
+
+    <!-- Gantt Main -->
+    <div class="gantt-wrap">
+      <div class="gantt-split">
+        <!-- Left pane -->
+        <div id="leftPane" class="left-pane">
+          <div class="left-header">Detailed Activity / WBS Element</div>
+          <div id="labelRows" class="label-rows"></div>
+        </div>
+
+        <!-- Splitter -->
+        <div id="splitter" class="splitter" title="Drag to resize"></div>
+
+        <!-- Right pane (horizontal scroll only here) -->
+        <div id="timelinePane" class="timeline-pane">
+          <!-- Sticky timeline header (drag here to zoom) -->
+          <div id="timelineHeader" class="timeline-header" title="Drag left/right here to zoom columns"></div>
+
+          <!-- Bars -->
+          <div id="barRows" class="bar-rows"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer / Notes -->
+    <div class="p-5 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 leading-relaxed">
+      Tip: If your Excel comes from copy/paste, ensure indentation is preserved (spaces before Activity ID / Activity Name).
+      <span class="ml-2 text-slate-500">Click group rows to collapse/expand.</span>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
 </html>
