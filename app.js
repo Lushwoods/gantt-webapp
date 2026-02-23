@@ -3,14 +3,32 @@
 let startDate = new Date("2024-07-01");
 let endDate   = new Date("2029-05-01");
 
-// Project “Month 1” anchor (Aug 2024 = M1)
-const projectM1 = new Date("2024-08-01");
-
 // Cap max display to 2031
 const CAP_MAX = new Date("2031-12-01");
 
 let tasks = [];               // built from excel
 const collapsed = new Set();  // collapsed group row indexes
+
+// Project Month Anchor (for Month row: first visible month = M1 per upload)
+let projectMonthAnchor = null; // Date (YYYY-MM-01) set from detected project start
+
+// -------------------- High-level view state --------------------
+let viewMode = "detailed";      // "detailed" | "high"
+let highLevelCutoff = 2;        // default depth
+let showMilestonesInHigh = true;
+let savedCollapsed = null;      // remembers collapse state when toggling back to detailed
+
+// -------------------- Dynamic legend (auto from file) --------------------
+const AUTO_PALETTE = [
+  "bg-blue-700","bg-amber-600","bg-orange-500","bg-emerald-600",
+  "bg-pink-600","bg-indigo-600","bg-purple-500","bg-teal-600",
+  "bg-rose-600","bg-cyan-600","bg-lime-600","bg-violet-600",
+  "bg-sky-600","bg-fuchsia-600","bg-green-700","bg-yellow-600"
+];
+
+let legendMode = "auto";     // "auto" | "keywords"
+let legendFieldKey = null;   // detected column name from the file
+let legendMap = new Map();   // value -> tailwind bg class
 
 // -------------------- Utils --------------------
 function normHeader(s){
@@ -47,6 +65,113 @@ function detectColumns(firstRow){
   const finishKey = pickKey(firstRow, ["Finish","Finish Date","Planned Finish","Baseline Finish","Early Finish","End","End Date"]);
   const durKey = pickKey(firstRow, ["Original Duration","Planned Duration","Duration","Remaining Duration"]);
   return { idKey, nameKey, startKey, finishKey, durKey };
+}
+
+function detectLegendColumn(firstRow){
+  const candidates = [
+    "Phase","Discipline","Area","Category","Trade","Package",
+    "Workstream","Zone","Location","System","Stage",
+    "Activity Code","Activity Codes","Activity Code -"
+  ];
+
+  const keys = Object.keys(firstRow || {});
+  const norm = {};
+  keys.forEach(k => norm[k] = normHeader(k));
+
+  // Exact match first
+  for (const c of candidates){
+    const cN = normHeader(c);
+    const exact = keys.find(k => norm[k] === cN);
+    if (exact) return exact;
+  }
+
+  // Partial match, e.g. "Activity Code - Discipline"
+  for (const c of candidates){
+    const cN = normHeader(c);
+    const partial = keys.find(k => norm[k].includes(cN));
+    if (partial) return partial;
+  }
+
+  return null;
+}
+
+function buildLegendMapFromRows(rows){
+  legendMap.clear();
+  legendFieldKey = detectLegendColumn(rows?.[0] || {});
+  if (!legendFieldKey) return;
+
+  const vals = [];
+  for (const r of rows) {
+    const v = String(r[legendFieldKey] ?? "").trim();
+    if (v) vals.push(v);
+  }
+
+  const unique = [...new Set(vals)];
+  unique.forEach((val, i) => {
+    legendMap.set(val, AUTO_PALETTE[i % AUTO_PALETTE.length]);
+  });
+}
+
+function renderLegend(){
+  const itemsEl = document.getElementById("legendItems");
+  if (!itemsEl) return;
+
+  itemsEl.innerHTML = "";
+
+  // If keywords mode, show your hardcoded categories
+  if (legendMode === "keywords" || legendMap.size === 0) {
+    const fallback = [
+      ["Piling", "bg-blue-700"],
+      ["ERSS/Excavation", "bg-amber-600"],
+      ["Concrete/Basement", "bg-orange-500"],
+      ["Structure", "bg-emerald-600"],
+      ["DTS Viaduct", "bg-pink-600"],
+      ["Fit-out/Facade", "bg-indigo-600"],
+      ["As-Builts", "bg-purple-500"],
+      ["Default", "bg-slate-500"],
+    ];
+
+    fallback.forEach(([label, color]) => {
+      const div = document.createElement("div");
+      div.className = "legend-item";
+      div.innerHTML = `<span class="dot ${color}"></span> ${label}`;
+      itemsEl.appendChild(div);
+    });
+
+    return;
+  }
+
+  // Auto legend from file
+  // Sort alphabetically for stability
+  const entries = [...legendMap.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+
+  // If too many, cap display
+  const MAX_SHOW = 18;
+  const shown = entries.slice(0, MAX_SHOW);
+
+  shown.forEach(([label, color]) => {
+    const div = document.createElement("div");
+    div.className = "legend-item";
+    div.innerHTML = `<span class="dot ${color}"></span> ${escapeHtml(label)}`;
+    itemsEl.appendChild(div);
+  });
+
+  if (entries.length > MAX_SHOW) {
+    const more = document.createElement("div");
+    more.className = "legend-item";
+    more.style.color = "#64748b";
+    more.textContent = `+${entries.length - MAX_SHOW} more`;
+    itemsEl.appendChild(more);
+  }
+}
+
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 function parseP6Date(value) {
@@ -126,7 +251,7 @@ function looksLikeActivityId(s) {
   return /^P\d+_[A-Z]{2,}[_-]?\d+/.test(t);
 }
 
-// --- Legend/category rules ---
+// --- Keyword legend/category rules (fallback) ---
 const LEGEND_RULES = [
   { key: "piling", color: "bg-blue-700" },
 
@@ -239,6 +364,132 @@ function toggleCollapse(idx) {
   else collapsed.add(idx);
 }
 
+// -------------------- High-level helpers --------------------
+function isGroupTask(task) {
+  return task.type === "header" || task.type === "sub-header";
+}
+
+function isAllowedByViewMode(task) {
+  if (viewMode === "detailed") return true;
+
+  if (isGroupTask(task)) return (task.level ?? 0) <= highLevelCutoff;
+  if (showMilestonesInHigh && task.type === "milestone") return true;
+  return (task.level ?? 0) <= highLevelCutoff + 1;
+}
+
+function applyHighLevelCollapse() {
+  collapsed.clear();
+  for (let idx = 0; idx < tasks.length; idx++) {
+    const t = tasks[idx];
+    if (!t) continue;
+    if (isGroupTask(t) && (t.level ?? 0) >= highLevelCutoff) {
+      collapsed.add(idx);
+    }
+  }
+}
+
+function enableHighLevel() {
+  viewMode = "high";
+  savedCollapsed = new Set(collapsed);
+  applyHighLevelCollapse();
+}
+
+function disableHighLevel() {
+  viewMode = "detailed";
+  if (savedCollapsed) {
+    collapsed.clear();
+    for (const idx of savedCollapsed) collapsed.add(idx);
+  }
+}
+
+function buildHighLevelControls(hostEl) {
+  if (!hostEl) return;
+  if (document.getElementById("btnHighLevel")) return;
+
+  const wrap = document.createElement("div");
+  wrap.style.display = "inline-flex";
+  wrap.style.alignItems = "center";
+  wrap.style.gap = "10px";
+  wrap.style.marginLeft = "10px";
+  wrap.style.flexWrap = "wrap";
+
+  const btn = document.createElement("button");
+  btn.id = "btnHighLevel";
+  btn.type = "button";
+  btn.textContent = "High Level: OFF";
+  btn.style.padding = "8px 12px";
+  btn.style.borderRadius = "10px";
+  btn.style.border = "1px solid #cbd5e1";
+  btn.style.background = "white";
+  btn.style.color = "#334155";
+  btn.style.cursor = "pointer";
+  btn.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+
+  btn.addEventListener("click", () => {
+    if (viewMode === "detailed") {
+      enableHighLevel();
+      btn.textContent = "High Level: ON";
+    } else {
+      disableHighLevel();
+      btn.textContent = "High Level: OFF";
+    }
+    renderAll();
+  });
+
+  const sel = document.createElement("select");
+  sel.id = "highLevelSelect";
+  sel.style.padding = "8px 10px";
+  sel.style.borderRadius = "10px";
+  sel.style.border = "1px solid #cbd5e1";
+  sel.style.background = "white";
+  sel.style.color = "#334155";
+  sel.style.cursor = "pointer";
+
+  [1, 2, 3, 4].forEach((lvl) => {
+    const opt = document.createElement("option");
+    opt.value = String(lvl);
+    opt.textContent = `Level ${lvl}`;
+    if (lvl === highLevelCutoff) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener("change", (e) => {
+    highLevelCutoff = parseInt(e.target.value, 10) || 2;
+    if (viewMode === "high") {
+      applyHighLevelCollapse();
+      renderAll();
+    }
+  });
+
+  const lab = document.createElement("label");
+  lab.style.display = "inline-flex";
+  lab.style.alignItems = "center";
+  lab.style.gap = "6px";
+  lab.style.fontSize = "13px";
+  lab.style.color = "#475569";
+  lab.style.userSelect = "none";
+
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = showMilestonesInHigh;
+  cb.addEventListener("change", (e) => {
+    showMilestonesInHigh = !!e.target.checked;
+    if (viewMode === "high") renderAll();
+  });
+
+  const txt = document.createElement("span");
+  txt.textContent = "Show milestones";
+
+  lab.appendChild(cb);
+  lab.appendChild(txt);
+
+  wrap.appendChild(btn);
+  wrap.appendChild(sel);
+  wrap.appendChild(lab);
+
+  hostEl.appendChild(wrap);
+}
+
 // -------------------- Colors from hierarchy (groups above) --------------------
 function colorFromHierarchy(idx, fallbackName){
   let myLevel = tasks[idx]?.level ?? 0;
@@ -251,23 +502,45 @@ function colorFromHierarchy(idx, fallbackName){
     const isGroup = row.type === "header" || row.type === "sub-header";
 
     if (isGroup && lvl < myLevel) {
+      // Prefer group's own auto legend if present
+      if (legendMode === "auto" && row.legendValue && legendMap.has(row.legendValue)) {
+        return legendMap.get(row.legendValue);
+      }
+
+      // Otherwise keyword from group name
       const c = legendColorFromText(row.name);
       if (c) return c;
+
       myLevel = lvl;
     }
   }
+
+  // fallback keyword
   return colorFromName(fallbackName);
 }
 
 function applyHierarchyColors(){
+  // groupColor used for summary bars
   for (let i = 0; i < tasks.length; i++) {
     if (tasks[i].type === "header" || tasks[i].type === "sub-header") {
-      tasks[i].groupColor = legendColorFromText(tasks[i].name) || null;
+      // Prefer auto legend mapping if available
+      if (legendMode === "auto" && tasks[i].legendValue && legendMap.has(tasks[i].legendValue)) {
+        tasks[i].groupColor = legendMap.get(tasks[i].legendValue);
+      } else {
+        tasks[i].groupColor = legendColorFromText(tasks[i].name) || null;
+      }
     }
   }
+
   for (let i = 0; i < tasks.length; i++) {
     if (tasks[i].type === "activity") {
-      tasks[i].color = colorFromHierarchy(i, tasks[i].name);
+      // Priority: explicit legendValue -> map -> inherit -> keyword fallback
+      const v = tasks[i].legendValue;
+      if (legendMode === "auto" && v && legendMap.has(v)) {
+        tasks[i].color = legendMap.get(v);
+      } else {
+        tasks[i].color = colorFromHierarchy(i, tasks[i].name);
+      }
     }
   }
 }
@@ -317,6 +590,7 @@ function buildTimelineHeader() {
   }
 
   const fmtMonth = new Intl.DateTimeFormat("en", { month: "short" });
+  const anchor = projectMonthAnchor || startM; // B2: project-based M1 anchor
 
   months.forEach((d) => {
     const mCell = document.createElement("div");
@@ -324,7 +598,7 @@ function buildTimelineHeader() {
     mCell.textContent = fmtMonth.format(d).toUpperCase();
     monthRow.appendChild(mCell);
 
-    const mIndex = monthDiff(projectM1, d) + 1; // Aug24 => 1
+    const mIndex = monthDiff(anchor, d) + 1; // project start month => M1
     const mmCell = document.createElement("div");
     mmCell.className = "th-cell mrow";
     mmCell.textContent = `M${mIndex}`;
@@ -351,6 +625,13 @@ function buildRows() {
   let hiddenCount = 0;
 
   tasks.forEach((task, idx) => {
+    // View mode filter first
+    if (!isAllowedByViewMode(task)) {
+      hiddenCount++;
+      return;
+    }
+
+    // Collapse filter
     if (isHiddenByCollapse(idx)) {
       hiddenCount++;
       return;
@@ -414,7 +695,10 @@ function buildRows() {
         sbar.style.opacity = "0.25";
       }
 
-      sbar.title = `${task.name} (summary)`;
+      const sTxt = fmtDisplayDate(new Date(task.start));
+      const eTxt = fmtDisplayDate(new Date(task.end));
+      sbar.title = `${task.name} (summary)\nStart: ${sTxt}\nFinish: ${eTxt}`;
+
       barRow.appendChild(sbar);
     }
 
@@ -425,6 +709,7 @@ function buildRows() {
       const diamond = document.createElement("div");
       diamond.className = "milestone-diamond";
       diamond.style.left = `${x - 6}px`;
+      diamond.title = `${task.name}\nDate: ${fmtDisplayDate(new Date(task.start))}`;
       barRow.appendChild(diamond);
 
       const ms = document.createElement("span");
@@ -433,6 +718,7 @@ function buildRows() {
       ms.textContent = new Date(task.start).toLocaleDateString("en-GB", {
         day: "2-digit", month: "short", year: "2-digit",
       });
+      ms.title = diamond.title;
       barRow.appendChild(ms);
     }
 
@@ -452,7 +738,11 @@ function buildRows() {
       const days = daysBetween(dStart, dEnd);
 
       bar.textContent = wPx > 80 ? `${days}d` : "";
-      bar.title = `${task.name}: ${days} days`;
+
+      const sTxt = fmtDisplayDate(dStart);
+      const eTxt = fmtDisplayDate(dEnd);
+      bar.title = `${task.name}\nStart: ${sTxt}\nFinish: ${eTxt}\nDuration: ${days} days`;
+
       barRow.appendChild(bar);
     }
 
@@ -460,8 +750,9 @@ function buildRows() {
   });
 
   if (status) {
+    const modeTxt = viewMode === "high" ? `High-level (L${highLevelCutoff})` : "Detailed";
     status.textContent =
-      `Done. Loaded ${tasks.length} rows. Click group rows to collapse.` +
+      `Done. Loaded ${tasks.length} rows. View: ${modeTxt}. Click group rows to collapse.` +
       (hiddenCount ? ` (${hiddenCount} hidden)` : "");
   }
 }
@@ -469,25 +760,59 @@ function buildRows() {
 function renderAll() {
   buildTimelineHeader();
   buildRows();
+  renderLegend();
 }
 
 // -------------------- Excel -> tasks --------------------
 function inferRowType(activityIdRaw, startD, finishD, durationRaw, indentLevel) {
   const idTrim = String(activityIdRaw ?? "").trim();
-  const durNum = durationRaw === "" || durationRaw == null ? null : Number(durationRaw);
+  const durNum = (durationRaw === "" || durationRaw == null) ? null : Number(durationRaw);
 
+  // Milestone if has start and either duration is 0 or finish missing
   if (startD && (durNum === 0 || !finishD)) return "milestone";
+
+  // Typical activity
   if (looksLikeActivityId(idTrim) && startD && finishD) return "activity";
+
+  // WBS/group rows (no activity id pattern)
   if (!looksLikeActivityId(idTrim)) return indentLevel <= 0 ? "header" : "sub-header";
 
+  // Fallbacks
   if (startD && finishD) return "activity";
   return indentLevel <= 0 ? "header" : "sub-header";
 }
 
+function deriveGroupSummariesInPlace(list){
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (!t) continue;
+    if (!(t.type === "header" || t.type === "sub-header")) continue;
+
+    const myLevel = t.level ?? 0;
+    let min = null, max = null;
+
+    for (let j = i + 1; j < list.length; j++) {
+      const c = list[j];
+      if (!c) continue;
+      const lvl = c.level ?? 0;
+      if (lvl <= myLevel) break;
+
+      const s = c.start ? new Date(c.start) : null;
+      const e = c.end ? new Date(c.end) : (c.start ? new Date(c.start) : null);
+
+      if (s && !isNaN(s)) min = !min || s < min ? s : min;
+      if (e && !isNaN(e)) max = !max || e > max ? e : max;
+    }
+
+    if (min && max) {
+      t.start = toISODate(min);
+      t.end   = toISODate(max);
+    }
+  }
+}
+
 function buildTasksFromRows(rows) {
   const newTasks = [];
-  let minD = null;
-  let maxD = null;
 
   const cols = detectColumns(rows[0] || {});
   const { idKey, nameKey, startKey, finishKey, durKey } = cols;
@@ -495,6 +820,9 @@ function buildTasksFromRows(rows) {
   if (!nameKey || (!startKey && !finishKey)) {
     throw new Error("Could not detect required columns. Need at least: Activity Name, Start, Finish.");
   }
+
+  // Build legend mapping from file (for auto mode)
+  buildLegendMapFromRows(rows);
 
   rows.forEach((r) => {
     const rawId = idKey ? r[idKey] : "";
@@ -516,43 +844,59 @@ function buildTasksFromRows(rows) {
     const type = inferRowType(rawId, startD, finishD, rawDur, level);
     const title = nameTrim || idTrim;
 
+    const legendVal = legendFieldKey ? String(r[legendFieldKey] ?? "").trim() : "";
+
     if (type === "header" || type === "sub-header") {
       const obj = { name: title, type, level };
+      if (legendVal) obj.legendValue = legendVal;
+
       if (startD) obj.start = toISODate(startD);
       if (finishD) obj.end = toISODate(finishD);
 
       newTasks.push(obj);
-
-      if (startD) minD = !minD || startD < minD ? startD : minD;
-      if (finishD) maxD = !maxD || finishD > maxD ? finishD : maxD;
       return;
     }
 
     if (type === "milestone") {
       const d = startD || finishD;
       if (d) {
-        newTasks.push({ name: title, type: "milestone", start: toISODate(d), level });
-        minD = !minD || d < minD ? d : minD;
-        maxD = !maxD || d > maxD ? d : maxD;
+        const obj = { name: title, type: "milestone", start: toISODate(d), level };
+        if (legendVal) obj.legendValue = legendVal;
+        newTasks.push(obj);
       }
       return;
     }
 
     if (startD && finishD) {
-      newTasks.push({
+      const obj = {
         name: title,
         type: "activity",
         start: toISODate(startD),
         end: toISODate(finishD),
         level
-      });
-
-      minD = !minD || startD < minD ? startD : minD;
-      maxD = !maxD || finishD > maxD ? finishD : maxD;
+      };
+      if (legendVal) obj.legendValue = legendVal;
+      newTasks.push(obj);
     }
   });
 
+  // Derive group summary dates from children (so summary bars + min/max always work)
+  deriveGroupSummariesInPlace(newTasks);
+
+  // Compute project min/max from all tasks
+  let minD = null;
+  let maxD = null;
+  for (const t of newTasks) {
+    const s = t.start ? new Date(t.start) : null;
+    const e = t.end ? new Date(t.end) : (t.start ? new Date(t.start) : null);
+    if (s && !isNaN(s)) minD = !minD || s < minD ? s : minD;
+    if (e && !isNaN(e)) maxD = !maxD || e > maxD ? e : maxD;
+  }
+
+  // Update timeline range + month anchor (B2)
   if (minD && maxD) {
+    projectMonthAnchor = new Date(minD.getFullYear(), minD.getMonth(), 1); // project start month = M1
+
     const padStart = new Date(minD);
     padStart.setMonth(padStart.getMonth() - 2);
 
@@ -561,6 +905,8 @@ function buildTasksFromRows(rows) {
 
     startDate = padStart;
     endDate = padEnd > CAP_MAX ? CAP_MAX : padEnd;
+  } else {
+    projectMonthAnchor = null;
   }
 
   // Update header stats (Commencement / Completion / Duration)
@@ -665,8 +1011,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const timelinePane = document.getElementById("timelinePane");
   const labelRows = document.getElementById("labelRows");
 
+  const legendSelect = document.getElementById("legendSelect");
+  if (legendSelect) {
+    legendSelect.addEventListener("change", (e) => {
+      legendMode = e.target.value === "keywords" ? "keywords" : "auto";
+      applyHierarchyColors();
+      renderAll();
+    });
+  }
+
   setupSplitter();
   setupHeaderDragZoom();
+
+  const controlsHost = document.getElementById("controls") || (loadBtn ? loadBtn.parentElement : null) || document.body;
+  buildHighLevelControls(controlsHost);
 
   if (zoomSlider) {
     zoomSlider.addEventListener("input", () => {
@@ -712,6 +1070,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (status) status.textContent = "Reading Excel…";
       collapsed.clear();
+      savedCollapsed = null;
 
       try {
         const data = await f.arrayBuffer();
@@ -725,19 +1084,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
         tasks = buildTasksFromRows(rows);
 
-        // assign legend colors by hierarchy + group colors for summary bars
+        // Apply colors (auto legend if available)
         applyHierarchyColors();
+
+        // If currently in high-level mode, keep deterministic collapse
+        if (viewMode === "high") applyHighLevelCollapse();
 
         if (status) status.textContent = `Loaded ${tasks.length} rows. Rendering…`;
         renderAll();
 
-        // Auto scroll near Aug-24 so you see M1
-        if (timelinePane) {
-          const px = dateToXpx(toISODate(projectM1));
+        // Auto scroll to project start month (B2)
+        if (timelinePane && projectMonthAnchor) {
+          const anchorISO = toISODate(projectMonthAnchor);
+          const px = dateToXpx(anchorISO);
           timelinePane.scrollLeft = Math.max(0, px - 250);
+        } else if (timelinePane) {
+          timelinePane.scrollLeft = 0;
         }
 
-        if (status) status.textContent = `Done. Loaded ${tasks.length} rows. Click group rows to collapse.`;
+        const modeTxt = viewMode === "high" ? `High-level (L${highLevelCutoff})` : "Detailed";
+        if (status) status.textContent = `Done. Loaded ${tasks.length} rows. View: ${modeTxt}. Click group rows to collapse.`;
       } catch (e) {
         console.error(e);
         if (status) status.textContent = `Error loading Excel: ${e.message || e}`;

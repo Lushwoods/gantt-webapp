@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SCHEDULE GANTT CHART</title>
 
-  <!-- Tailwind (for bg-xxx utility classes you use in bars) -->
+  <!-- Tailwind (for bg-xxx utility classes used in bars) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Poppins -->
@@ -51,7 +51,7 @@
 
     <!-- Controls -->
     <div class="controls-panel">
-      <div class="controls-left">
+      <div class="controls-left" id="controls">
         <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" class="file-input" />
         <button id="loadBtn" class="btn-primary">Load Excel & Update</button>
         <button id="expandAllBtn" class="btn-secondary">Expand all</button>
@@ -67,16 +67,21 @@
       </div>
     </div>
 
-    <!-- Detailed Legend -->
-    <div class="legend-panel">
-      <div class="legend-item"><span class="dot bg-blue-700"></span> Piling</div>
-      <div class="legend-item"><span class="dot bg-amber-600"></span> ERSS/Excavation</div>
-      <div class="legend-item"><span class="dot bg-orange-500"></span> Concrete/Basement</div>
-      <div class="legend-item"><span class="dot bg-emerald-600"></span> Structure</div>
-      <div class="legend-item"><span class="dot bg-pink-600"></span> DTS Viaduct</div>
-      <div class="legend-item"><span class="dot bg-indigo-600"></span> Fit-out/Facade</div>
-      <div class="legend-item"><span class="dot bg-purple-500"></span> As-Builts</div>
-      <div class="legend-item"><span class="dot bg-slate-500"></span> Default</div>
+    <!-- Legend -->
+    <div class="legend-panel" id="legendPanel">
+      <!-- Legend source selector -->
+      <div class="legend-item" style="gap:8px;">
+        <span class="text-slate-500 text-[11px] uppercase tracking-widest font-semibold">Legend</span>
+        <select id="legendSelect" class="px-2 py-1 rounded-md border border-slate-200 text-xs bg-white text-slate-700">
+          <option value="auto">Auto (from file)</option>
+          <option value="keywords">Keywords (fallback)</option>
+        </select>
+      </div>
+
+      <!-- Dynamic legend items injected here -->
+      <div id="legendItems" style="display:flex; gap:14px; flex-wrap:wrap;"></div>
+
+      <!-- Always-present items -->
       <div class="legend-item"><span class="dot summary-dot"></span> Summary</div>
       <div class="legend-item"><span class="diamond"></span> Milestone</div>
     </div>
